@@ -1,13 +1,18 @@
 # Cutting the Cake - a screensaver of Calca 1 from Neal Stephenson's "Anathem"
-VERSION  := 0.1.0
+VERSION  := 1.0.0
 PREFIX   ?= /usr
 SYSCONFDIR ?= /etc
 DESTDIR  ?=
 CC       ?= cc
+# gnu11 keeps the binary free of very recent glibc symbols, so packages built on a
+# new distribution still run on older ones
 CFLAGS   ?= -O2 -g
 override CFLAGS += -std=gnu11 -Wall -Isrc
 SDL_CFLAGS := $(shell pkg-config --cflags sdl2 2>/dev/null)
 SDL_LIBS   := $(shell pkg-config --libs sdl2 2>/dev/null)
+
+MINGW    ?= x86_64-w64-mingw32
+MINGW_ROOT ?= /usr/$(MINGW)/sys-root/mingw
 
 all: build/cutting-the-cake
 
@@ -19,7 +24,59 @@ build/cutting-the-cake: src/cake.c src/stb_image.h $(wildcard assets/art/*)
 check: build/cutting-the-cake
 	SDL_VIDEODRIVER=dummy ./build/cutting-the-cake --snapshot build/check.bmp --time 90 --size 640x400 && echo "ran a full round"
 
+install: all
+	install -Dm755 build/cutting-the-cake $(DESTDIR)$(PREFIX)/bin/cutting-the-cake
+	install -Dm755 packaging/linux/cutting-the-cake-screensaver $(DESTDIR)$(PREFIX)/bin/cutting-the-cake-screensaver
+	install -Dm644 packaging/linux/cutting-the-cake.desktop $(DESTDIR)$(PREFIX)/share/applications/cutting-the-cake.desktop
+	install -Dm644 packaging/linux/cutting-the-cake-autostart.desktop $(DESTDIR)$(SYSCONFDIR)/xdg/autostart/cutting-the-cake-screensaver.desktop
+	install -Dm644 packaging/cutting-the-cake.png $(DESTDIR)$(PREFIX)/share/icons/hicolor/256x256/apps/cutting-the-cake.png
+	install -Dm644 README.md $(DESTDIR)$(PREFIX)/share/doc/cutting-the-cake/README.md
+	install -Dm644 LICENSE $(DESTDIR)$(PREFIX)/share/doc/cutting-the-cake/LICENSE
+
+uninstall:
+	rm -f $(DESTDIR)$(PREFIX)/bin/cutting-the-cake $(DESTDIR)$(PREFIX)/bin/cutting-the-cake-screensaver
+	rm -f $(DESTDIR)$(PREFIX)/share/applications/cutting-the-cake.desktop $(DESTDIR)$(SYSCONFDIR)/xdg/autostart/cutting-the-cake-screensaver.desktop
+	rm -f $(DESTDIR)$(PREFIX)/share/icons/hicolor/256x256/apps/cutting-the-cake.png
+	rm -rf $(DESTDIR)$(PREFIX)/share/doc/cutting-the-cake
+
+# ---- packages (written to dist/) ----
+ARCH_DEB := $(shell dpkg --print-architecture 2>/dev/null || echo amd64)
+
+deb: all
+	rm -rf build/deb && mkdir -p build/deb/DEBIAN dist
+	$(MAKE) install DESTDIR=build/deb PREFIX=/usr
+	strip build/deb/usr/bin/cutting-the-cake
+	sed -e 's/@VERSION@/$(VERSION)/' -e 's/@ARCH@/$(ARCH_DEB)/' \
+	    -e "s/@SIZE@/$$(du -sk build/deb/usr | cut -f1)/" packaging/linux/control.in > build/deb/DEBIAN/control
+	echo /etc/xdg/autostart/cutting-the-cake-screensaver.desktop > build/deb/DEBIAN/conffiles
+	dpkg-deb --root-owner-group --build build/deb dist/cutting-the-cake_$(VERSION)_$(ARCH_DEB).deb
+
+rpm:
+	mkdir -p dist build/rpm/SOURCES
+	git archive --format=tar.gz --prefix=cutting-the-cake-$(VERSION)/ -o build/rpm/SOURCES/cutting-the-cake-$(VERSION).tar.gz HEAD
+	rpmbuild -bb $(RPMFLAGS) --define "_topdir $(CURDIR)/build/rpm" --define "version $(VERSION)" packaging/linux/cutting-the-cake.spec
+	cp build/rpm/RPMS/*/cutting-the-cake-$(VERSION)-*.rpm dist/
+
+# Windows: the screensaver itself, and a small CuttingTheCake.scr that goes in the
+# Windows system folder (so it is listed with the other screensavers) and starts it
+windows:
+	@mkdir -p build/win
+	$(MINGW)-gcc -O2 -std=gnu11 -Wall -Isrc -I$(MINGW_ROOT)/include/SDL2 -Dmain=SDL_main \
+	    -o build/win/cutting-the-cake.exe src/cake.c \
+	    -L$(MINGW_ROOT)/lib -lmingw32 -lSDL2main -lSDL2 -lm -mwindows -static-libgcc
+	$(MINGW)-windres packaging/windows/stub.rc -O coff -o build/win/stub.res
+	$(MINGW)-gcc -O2 -Wall -o build/win/CuttingTheCake.scr packaging/windows/stub.c build/win/stub.res -mwindows -static
+	$(MINGW)-strip build/win/cutting-the-cake.exe build/win/CuttingTheCake.scr
+	cp $(MINGW_ROOT)/bin/SDL2.dll build/win/
+	[ ! -f $(MINGW_ROOT)/bin/SDL3.dll ] || cp $(MINGW_ROOT)/bin/SDL3.dll build/win/
+
+installer: windows
+	mkdir -p dist
+	makensis -V2 -DVERSION=$(VERSION) packaging/windows/cutting-the-cake.nsi
+
+dist: deb rpm installer
+
 clean:
 	rm -rf build dist
 
-.PHONY: all check clean
+.PHONY: all check install uninstall deb rpm windows installer dist clean

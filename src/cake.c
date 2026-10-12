@@ -372,10 +372,11 @@ static void count_at(int corner, double x, double y, int n, double pop, double s
     char b[8];
     double sx, sy, k = pop >= 1 ? 1 : 0.3 + 0.9 * pop, s = size * S * k;
     snprintf(b, sizeof b, "%d", n);
+    double ts = n > 9 ? s * 0.68 : s; /* two figures are written smaller to fit */
     tr(corner, x, y, &sx, &sy);
     disc(sx, sy, s * 4.6, col(PAPER, 0.9), col(PAPER, 0.9));
     ring(sx, sy, s * 4.6, s * 0.5, col(INK, 0.9));
-    text(b, sx, sy - s * 3, s, 1.1, col(INK, 1));
+    text(b, sx, sy - ts * 3, ts, 1.1, col(INK, 1));
 }
 
 /* the eight triangular servings of the tilted square, by number */
@@ -401,8 +402,19 @@ static void draw_cake(int w, int h)
     wpoly(0, x, y, 4, col(PAN_RIM, 1));
     for (int i = 0; i < 4; i++) { x[i] = -lip + SQ[i][0] * (PAN_N + 2 * lip); y[i] = -lip + SQ[i][1] * (PAN_N + 2 * lip); }
     wpoly(0, x, y, 4, col(PAN, 1));
-    for (int i = 0; i < 4; i++) { x[i] = SQ[i][0] * PAN_N; y[i] = SQ[i][1] * PAN_N; }
-    cake_piece(0, x, y, 4, 0, 0, 1, 1);
+    /* the cake's top, laid down a spatula-width square at a time and only where it
+     * shows: very large triangles running far off screen upset some renderers */
+    for (int i = 0; i < (int)PAN_N; i++)
+        for (int j = 0; j < (int)PAN_N; j++) {
+            int seen = 0;
+            for (int q = 0; q < 4; q++) {
+                double sx, sy;
+                x[q] = i + SQ[q][0]; y[q] = j + SQ[q][1];
+                tr(0, x[q], y[q], &sx, &sy);
+                if (sx > -S && sx < w + S && sy > -S && sy < h + S) seen = 1;
+            }
+            if (seen) cake_piece(0, x, y, 4, 0, 0, 1, 1);
+        }
 
     /* servings that have been eaten leave bare pan; ones on their way out fly left */
     for (int i = 0; i < 8; i++) {
@@ -483,6 +495,8 @@ static void bubble(double x, double y, const char *str, double pop)
     if (bar) snprintf(b, sizeof b, "%s", bar + 1);
     double s = unit * 0.3 * (pop >= 1 ? 1 : 0.5 + 0.5 * pop), lines = b[0] ? 2 : 1;
     double bw = fmax(text_width(a, s), text_width(b, s)) + s * 14, bh = s * (lines * 8.6 + 6);
+    double edge = unit * 1.5;
+    if (x - bw / 2 < edge) x = edge + bw / 2; /* keep it on the screen */
     double x0 = x - bw / 2, y0 = y - bh, r = s * 3.2;
     for (int pass = 0; pass < 2; pass++) { /* ink edge, then paper */
         double g = pass ? 0 : s * 0.75;
@@ -530,8 +544,9 @@ static void draw_scene(SDL_Renderer *r, int w, int h)
     /* the three of them, down the left of the table */
     int dath = T > 22.4 && T < 37 ? SP_DATH_HMM : T > 64.6 ? SP_DATH_YAY : SP_DATH;
     int ars = T > 70.4 ? SP_ARSIBALT_YAY : SP_ARSIBALT;
-    double base = h * 0.80, px[3] = {w * 0.215, w * 0.36, w * 0.075}, tall[3] = {h * 0.42, h * 0.31, h * 0.42};
     int who[3] = {SP_ERASMAS, dath, ars};
+    double base = h * 0.80, px[3] = {w * 0.215, w * 0.355, w * 0.08}, tall[3];
+    for (int i = 0; i < 3; i++) tall[i] = h * 0.43 * sprite[who[i]].h / sprite[SP_ERASMAS].h; /* all drawn to one scale */
     for (int k = 2; k >= 0; k--) {
         int i = k == 2 ? 2 : k == 1 ? 0 : 1; /* Arsibalt at the back, Dath in front */
         double bob = sin(anim_t * 1.6 + i * 2) * unit * 0.25;
@@ -542,7 +557,7 @@ static void draw_scene(SDL_Renderer *r, int w, int h)
         const Line *l = &LINES[i];
         if (T < l->t0 || T > l->t1) continue;
         double pop = fmin((T - l->t0) / 0.2, 1) * fmin((l->t1 - T) / 0.15, 1);
-        bubble(px[l->who] + unit * 3, base - tall[l->who] - unit * 2.5, l->text, pop);
+        bubble(px[l->who] + unit * 2, base - h * 0.43 * sprite[l->who == DATH ? SP_DATH : l->who == ERASMAS ? SP_ERASMAS : SP_ARSIBALT].h / sprite[SP_ERASMAS].h - unit * 2.5, l->text, pop);
     }
     const char *l1 = "CUTTING THE CAKE", *l2 = "HOW DO YOU CUT EIGHT EQUAL SERVINGS?";
     if (T > 8.6) { l1 = "TWO EACH WAY"; l2 = "FOUR SERVINGS"; }

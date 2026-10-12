@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Cutting the Cake screensaver
+Comment=Start Cutting the Cake when the session has been idle
+Exec=cutting-the-cake-screensaver watch
+Icon=cutting-the-cake
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

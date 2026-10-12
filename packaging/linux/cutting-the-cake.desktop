@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Cutting the Cake
+Comment=Watch Dath work out how to cut eight equal servings
+Exec=cutting-the-cake --window
+Icon=cutting-the-cake
+Categories=Game;LogicGame;Education;Math;
+Keywords=Anathem;doubling the square;geometry;screensaver;
