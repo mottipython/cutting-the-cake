@@ -1,6 +1,6 @@
 # Cutting the Cake
 
-A screensaver of Calca 1 from Neal Stephenson's novel *Anathem*. Linux and Windows.
+A screensaver of Calca 1 from Neal Stephenson's novel *Anathem*. Linux, Windows and macOS. One of the [Anathem screensavers](https://github.com/mottipython/anathem-screensavers).
 
 ![Dath has cut sixteen servings where he expected eight](docs/screenshots/2-sixteen.png)
 
